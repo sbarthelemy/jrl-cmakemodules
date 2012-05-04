@@ -110,7 +110,7 @@ MACRO(PYTHON_INSTALL MODULE FILE DEST)
   INSTALL(CODE
     "EXEC_PROGRAM(
     \"${PYTHON_EXECUTABLE}\" ARGS
-    \"${CMAKE_SOURCE_DIR}/cmake/compile.py\"
+    \"${jrl-cmake_DIR}/compile.py\"
     \"${CMAKE_CURRENT_SOURCE_DIR}\"
     \"${CMAKE_CURRENT_BINARY_DIR}\"
     \"${MODULE}/${FILE}\")
