@@ -24,89 +24,92 @@ MACRO(_SETUP_PROJECT_DOCUMENTATION)
   FIND_PACKAGE(Doxygen)
 
   IF(NOT DOXYGEN_FOUND)
-    MESSAGE(FATAL_ERROR "Failed to find Doxygen.")
+      MESSAGE(WARNING "Failed to find Doxygen. Skipping doc generation")
+  ELSE(NOT DOXYGEN_FOUND)
+      SET(WITH_DOXYGEN ON)
   ENDIF(NOT DOXYGEN_FOUND)
+  IF(WITH_DOXYGEN)
+    # Search for Perl.
+    FIND_PROGRAM(PERL perl DOC "the Perl interpreter")
+    IF(NOT PERL)
+      MESSAGE(SEND_ERROR "Failed to find Perl.")
+    ENDIF(NOT PERL)
 
-  # Search for Perl.
-  FIND_PROGRAM(PERL perl DOC "the Perl interpreter")
-  IF(NOT PERL)
-    MESSAGE(SEND_ERROR "Failed to find Perl.")
-  ENDIF(NOT PERL)
+    # Generate variable to be substitued in Doxyfile.in
+    # for dot use.
+    IF(DOXYGEN_DOT_FOUND)
+      SET(HAVE_DOT YES)
+    ELSE(DOXYGEN_DOT_FOUND)
+      SET(HAVE_DOT NO)
+    ENDIF(DOXYGEN_DOT_FOUND)
 
-  # Generate variable to be substitued in Doxyfile.in
-  # for dot use.
-  IF(DOXYGEN_DOT_FOUND)
-    SET(HAVE_DOT YES)
-  ELSE(DOXYGEN_DOT_FOUND)
-    SET(HAVE_DOT NO)
-  ENDIF(DOXYGEN_DOT_FOUND)
+    IF(UNIX)
+      SET(MAKE make)
+    ELSEIF(WIN32)
+      SET(MAKE nmake)
+    ELSE(UNIX)
+      MESSAGE(FATAL_ERROR
+        "Doxygen documentation generation not supported on this platform.")
+    ENDIF(UNIX)
 
-  IF(UNIX)
-    SET(MAKE make)
-  ELSEIF(WIN32)
-    SET(MAKE nmake)
-  ELSE(UNIX)
-    MESSAGE(FATAL_ERROR
-      "Doxygen documentation generation not supported on this platform.")
-  ENDIF(UNIX)
+    # Teach CMake how to generate the documentation.
+    IF(MSVC)
+      # FIXME: it is impossible to trigger documentation installation
+      # at install, so put the target in ALL instead.
+      ADD_CUSTOM_TARGET(doc ALL
+        COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
+        WORKING_DIRECTORY doc
+        COMMENT "Generating Doxygen documentation"
+        )
+    ELSE(MSVC)
+      ADD_CUSTOM_TARGET(doc
+        COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
+        WORKING_DIRECTORY doc
+        COMMENT "Generating Doxygen documentation"
+        )
 
-  # Teach CMake how to generate the documentation.
-  IF(MSVC)
-    # FIXME: it is impossible to trigger documentation installation
-    # at install, so put the target in ALL instead.
-    ADD_CUSTOM_TARGET(doc ALL
+      INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${MAKE} doc)")
+    ENDIF(MSVC)
+
+    ADD_CUSTOM_COMMAND(
+      OUTPUT
+      ${CMAKE_CURRENT_BINARY_DIR}/doc/${PROJECT_NAME}.doxytag
+      ${CMAKE_CURRENT_BINARY_DIR}/doc/doxygen-html
       COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
       WORKING_DIRECTORY doc
       COMMENT "Generating Doxygen documentation"
       )
-  ELSE(MSVC)
-    ADD_CUSTOM_TARGET(doc
-      COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
-      WORKING_DIRECTORY doc
-      COMMENT "Generating Doxygen documentation"
+
+    # Clean generated files.
+    SET_PROPERTY(
+      DIRECTORY APPEND PROPERTY
+      ADDITIONAL_MAKE_CLEAN_FILES
+      ${CMAKE_CURRENT_BINARY_DIR}/doc/${PROJECT_NAME}.doxytag
+      ${CMAKE_CURRENT_BINARY_DIR}/doc/doxygen.log
+      ${CMAKE_CURRENT_BINARY_DIR}/doc/doxygen-html
       )
 
-    INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${MAKE} doc)")
-  ENDIF(MSVC)
-
-  ADD_CUSTOM_COMMAND(
-    OUTPUT
-    ${CMAKE_CURRENT_BINARY_DIR}/doc/${PROJECT_NAME}.doxytag
-    ${CMAKE_CURRENT_BINARY_DIR}/doc/doxygen-html
-    COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
-    WORKING_DIRECTORY doc
-    COMMENT "Generating Doxygen documentation"
-    )
-
-  # Clean generated files.
-  SET_PROPERTY(
-    DIRECTORY APPEND PROPERTY
-    ADDITIONAL_MAKE_CLEAN_FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/doc/${PROJECT_NAME}.doxytag
-    ${CMAKE_CURRENT_BINARY_DIR}/doc/doxygen.log
-    ${CMAKE_CURRENT_BINARY_DIR}/doc/doxygen-html
-    )
-
-  # Install generated files.
-  INSTALL(
-    FILES ${CMAKE_CURRENT_BINARY_DIR}/doc/${PROJECT_NAME}.doxytag
-    DESTINATION share/doc/${PROJECT_NAME}/doxygen-html)
-  INSTALL(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/doc/doxygen-html
-    DESTINATION share/doc/${PROJECT_NAME})
-
-  IF(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/doc/pictures)
-    INSTALL(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doc/pictures
+    # Install generated files.
+    INSTALL(
+      FILES ${CMAKE_CURRENT_BINARY_DIR}/doc/${PROJECT_NAME}.doxytag
       DESTINATION share/doc/${PROJECT_NAME}/doxygen-html)
-  ENDIF(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/doc/pictures)
+    INSTALL(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/doc/doxygen-html
+      DESTINATION share/doc/${PROJECT_NAME})
 
-  LIST(APPEND LOGGING_WATCHED_VARIABLES
-    DOXYGEN_SKIP_DOT
-    DOXYGEN_EXECUTABLE
-    DOXYGEN_FOUND
-    DOXYGEN_DOT_EXECUTABLE
-    DOXYGEN_DOT_FOUND
-    DOXYGEN_DOT_PATH
-    )
+    IF(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/doc/pictures)
+      INSTALL(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doc/pictures
+        DESTINATION share/doc/${PROJECT_NAME}/doxygen-html)
+    ENDIF(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/doc/pictures)
+
+    LIST(APPEND LOGGING_WATCHED_VARIABLES
+      DOXYGEN_SKIP_DOT
+      DOXYGEN_EXECUTABLE
+      DOXYGEN_FOUND
+      DOXYGEN_DOT_EXECUTABLE
+      DOXYGEN_DOT_FOUND
+      DOXYGEN_DOT_PATH
+      )
+ ENDIF(WITH_DOXYGEN)
 ENDMACRO(_SETUP_PROJECT_DOCUMENTATION)
 
 # _SETUP_PROJECT_DOCUMENTATION_FINALIZE
@@ -118,20 +121,22 @@ ENDMACRO(_SETUP_PROJECT_DOCUMENTATION)
 # the replacement of user-defined variables.
 #
 MACRO(_SETUP_PROJECT_DOCUMENTATION_FINALIZE)
-  # Generate Doxyfile.extra.
-  CONFIGURE_FILE(
-    ${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.extra.in
-    ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile.extra
-    @ONLY
-    )
-  # Generate Doxyfile.
-  CONFIGURE_FILE(
-    ${jrl-cmake_DIR}/doxygen/Doxyfile.in
-    ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile
-    @ONLY
-    )
-  FILE(STRINGS ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile.extra doxyfile_extra)
-  FOREACH(x ${doxyfile_extra})
-    FILE(APPEND ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile ${x} "\n")
-  ENDFOREACH(x in doxyfile_extra)
+    IF(WITH_DOXYGEN)
+    # Generate Doxyfile.extra.
+    CONFIGURE_FILE(
+      ${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.extra.in
+      ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile.extra
+      @ONLY
+      )
+    # Generate Doxyfile.
+    CONFIGURE_FILE(
+      ${jrl-cmake_DIR}/doxygen/Doxyfile.in
+      ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile
+      @ONLY
+      )
+    FILE(STRINGS ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile.extra doxyfile_extra)
+    FOREACH(x ${doxyfile_extra})
+      FILE(APPEND ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile ${x} "\n")
+    ENDFOREACH(x in doxyfile_extra)
+ENDIF(WITH_DOXYGEN)
 ENDMACRO(_SETUP_PROJECT_DOCUMENTATION_FINALIZE)
